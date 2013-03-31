@@ -5,18 +5,20 @@ import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.artifact.handler.manager.ArtifactHandlerManager;
 import org.apache.maven.artifact.metadata.ArtifactMetadataSource;
 import org.apache.maven.artifact.repository.ArtifactRepository;
+import org.apache.maven.artifact.repository.DefaultArtifactRepository;
+import org.apache.maven.artifact.repository.layout.DefaultRepositoryLayout;
 import org.apache.maven.artifact.repository.metadata.ArtifactRepositoryMetadata;
 import org.apache.maven.artifact.repository.metadata.RepositoryMetadata;
 import org.apache.maven.artifact.repository.metadata.RepositoryMetadataManager;
 import org.apache.maven.artifact.repository.metadata.RepositoryMetadataResolutionException;
 import org.apache.maven.doxia.sink.Sink;
-import org.apache.maven.model.Model;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.report.projectinfo.AbstractProjectInfoRenderer;
 import org.apache.maven.report.projectinfo.AbstractProjectInfoReport;
 import org.apache.maven.reporting.MavenReportException;
+import org.codehaus.plexus.PlexusContainer;
 import org.codehaus.plexus.i18n.I18N;
 
 import java.util.ArrayList;
@@ -38,8 +40,19 @@ public class DownloadSiteMojo extends AbstractProjectInfoReport {
     protected ArtifactFactory artifactFactory;
     @Component
     protected ArtifactHandlerManager artifactHandlerManager;
+    @Component
+    PlexusContainer container;
+
     @Parameter
     List<DownloadSection> sections = new ArrayList<DownloadSection>();
+
+    /**
+     * URL of the repository to resolve downloadable artifacts from.
+     * If missing, the first remote repository configured for the project will be used.
+     */
+    @Parameter
+    String url;
+
 
     @Override
     protected String getI18Nsection() {
@@ -90,8 +103,14 @@ public class DownloadSiteMojo extends AbstractProjectInfoReport {
                 startSection(getTitle());
 
                 Artifact artifact = getProject().getArtifact();
+                ArtifactRepository repo;
+                if (url!=null)
+                    repo = new DefaultArtifactRepository("default", url, new DefaultRepositoryLayout());
+                else
+                    repo = remoteRepositories.get(0);
+
                 RepositoryMetadata metadata = new ArtifactRepositoryMetadata( artifact );
-                repositoryMetadataManager.resolve(metadata, remoteRepositories, localRepository);
+                repositoryMetadataManager.resolve(metadata, Collections.singletonList(repo), localRepository);
 
                 for (DownloadSection section : sections) {
                     startTable();
@@ -110,7 +129,7 @@ public class DownloadSiteMojo extends AbstractProjectInfoReport {
                         tableCell(v);
                         for (Type t : section.types) {
                             Artifact a = t.createArtifact(project,factory,section,v);
-                            String url = getURL(a);
+                            String url = getURL(a,repo);
                             sink.tableCell();
                             link(url, url.substring(url.lastIndexOf('/') + 1));
                             sink.tableCell_();
@@ -121,7 +140,6 @@ public class DownloadSiteMojo extends AbstractProjectInfoReport {
 
                     endTable();
                 }
-//            List<ArtifactVersion> all = artifactMetadataSource.retrieveAvailableVersions(artifact, localRepository, remoteRepositories);
 
                 endSection();
             } catch (RepositoryMetadataResolutionException e) {
@@ -135,8 +153,9 @@ public class DownloadSiteMojo extends AbstractProjectInfoReport {
         }
     }
 
-    private String getURL(Artifact a) {
-        ArtifactRepository r = remoteRepositories.get(0);// TODO
-        return r.getUrl()+r.getBasedir()+r.pathOf(a);
+    private String getURL(Artifact a, ArtifactRepository r) {
+        String url = r.getUrl();
+        if (!url.endsWith("/")) url+='/';
+        return url+r.pathOf(a);
     }
 }
