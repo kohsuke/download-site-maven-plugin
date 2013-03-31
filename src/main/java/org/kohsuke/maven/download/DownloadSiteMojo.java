@@ -14,7 +14,6 @@ import org.apache.maven.model.Model;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
-import org.apache.maven.project.MavenProject;
 import org.apache.maven.report.projectinfo.AbstractProjectInfoRenderer;
 import org.apache.maven.report.projectinfo.AbstractProjectInfoReport;
 import org.apache.maven.reporting.MavenReportException;
@@ -68,15 +67,21 @@ public class DownloadSiteMojo extends AbstractProjectInfoReport {
     }
 
     class RendererImpl extends AbstractProjectInfoRenderer {
-        private final Model model = getProject().getModel();
+        private Locale locale;
 
         RendererImpl(Sink sink, I18N i18n, Locale locale) {
             super(sink, i18n, locale);
+            this.locale = locale;
         }
 
         @Override
         protected String getI18Nsection() {
             return DownloadSiteMojo.this.getI18Nsection();
+        }
+
+        @Override
+        protected String getI18nString(String section, String key) {
+            return DownloadSiteMojo.this.getI18nString(locale,key);
         }
 
         @Override
@@ -106,7 +111,9 @@ public class DownloadSiteMojo extends AbstractProjectInfoReport {
                         for (Type t : section.types) {
                             Artifact a = t.createArtifact(project,factory,section,v);
                             String url = getURL(a);
-                            tableCell("{{{" + url + "}"+url.substring(url.lastIndexOf('/')+1)+"}}");
+                            sink.tableCell();
+                            link(url, url.substring(url.lastIndexOf('/') + 1));
+                            sink.tableCell_();
                         }
 
                         sink.tableRow_();
